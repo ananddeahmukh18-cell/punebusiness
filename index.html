@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse all Pune business websites included in the deployment ZIP.">
+  <title>Pune Businesses</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: #172033; background: #f4f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header { padding: 1.25rem clamp(1rem, 4vw, 3rem); color: white; background: #172554; }
+    header h1 { margin: 0 0 .35rem; font-size: clamp(1.4rem, 3vw, 2rem); }
+    header p { margin: 0; color: #dbeafe; }
+    .layout { display: grid; grid-template-columns: minmax(230px, 320px) 1fr; min-height: calc(100vh - 100px); }
+    aside { padding: 1rem; border-right: 1px solid #dce2ed; background: white; }
+    .status { min-height: 1.5em; margin: 0 0 .75rem; color: #526078; font-size: .9rem; }
+    .business-list { display: grid; gap: .4rem; }
+    .business-list button { width: 100%; padding: .7rem .8rem; border: 1px solid transparent; border-radius: .5rem; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+    .business-list button:hover, .business-list button[aria-current="page"] { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+    main { min-width: 0; padding: 1rem; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+    .toolbar h2 { margin: 0; font-size: 1.1rem; }
+    .toolbar a, .choose-file { display: inline-block; padding: .55rem .8rem; border: 1px solid #cbd5e1; border-radius: .45rem; background: white; color: #172033; text-decoration: none; font: inherit; cursor: pointer; }
+    .choose-file input { display: none; }
+    iframe { display: block; width: 100%; height: calc(100vh - 160px); min-height: 480px; border: 1px solid #dce2ed; border-radius: .6rem; background: white; }
+    .empty { max-width: 660px; margin: 10vh auto; padding: 2rem; border: 1px solid #dce2ed; border-radius: .8rem; background: white; text-align: center; }
+    .empty p { color: #526078; line-height: 1.6; }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid #dce2ed; } .business-list { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); } iframe { height: 72vh; min-height: 420px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pune Businesses</h1>
+    <p>One place to browse the business websites from the deployment archive.</p>
+  </header>
+  <div class="layout">
+    <aside>
+      <p class="status" id="status" role="status">Loading website archive…</p>
+      <nav class="business-list" id="business-list" aria-label="Business websites"></nav>
+    </aside>
+    <main>
+      <div class="toolbar">
+        <h2 id="current-title">Choose a business</h2>
+        <div>
+          <a id="open-page" href="#" target="_blank" rel="noopener" hidden>Open page in new tab</a>
+          <label class="choose-file">Choose ZIP file<input id="zip-file" type="file" accept=".zip,application/zip"></label>
+        </div>
+      </div>
+      <section id="welcome" class="empty">
+        <h2>Loading your sites</h2>
+        <p>The archive is unpacked in your browser. If you opened this page directly from your computer and the archive cannot load automatically, choose <strong>pune_52_deploy_fix.zip</strong> above.</p>
+      </section>
+      <iframe id="site-frame" title="Selected business website" hidden></iframe>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    (() => {
+      const archiveUrl = 'https://raw.githubusercontent.com/ananddeahmukh18-cell/punebusiness/main/pune_52_deploy_fix.zip';
+      const list = document.getElementById('business-list');
+      const status = document.getElementById('status');
+      const frame = document.getElementById('site-frame');
+      const welcome = document.getElementById('welcome');
+      const title = document.getElementById('current-title');
+      const openPage = document.getElementById('open-page');
+      const urls = new Map();
+      let pages = [];
+
+      function displayName(path) {
+        const folder = path.includes('/') ? path.split('/')[0] : 'Pune Businesses';
+        return folder.replace(/-pune$/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
+
+      function showPage(page, button) {
+        frame.src = urls.get(page.path);
+        frame.hidden = false;
+        welcome.hidden = true;
+        title.textContent = page.name;
+        openPage.href = urls.get(page.path);
+        openPage.hidden = false;
+        list.querySelectorAll('button').forEach(item => item.removeAttribute('aria-current'));
+        button.setAttribute('aria-current', 'page');
+      }
+
+      async function loadArchive(input) {
+        status.textContent = 'Reading and extracting ZIP…';
+        list.replaceChildren();
+        frame.hidden = true;
+        welcome.hidden = false;
+        openPage.hidden = true;
+        for (const url of urls.values()) URL.revokeObjectURL(url);
+        urls.clear();
+        try {
+          const zip = await JSZip.loadAsync(input);
+          const entries = Object.values(zip.files).filter(file => !file.dir && file.name.toLowerCase().endsWith('.html'));
+          if (!entries.length) throw new Error('No HTML pages were found in this ZIP.');
+          for (const file of entries) {
+            const content = await file.async('blob');
+            urls.set(file.name, URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' })));
+          }
+          pages = entries.map(file => ({ path: file.name, name: displayName(file.name) }));
+          pages.sort((a, b) => a.name.localeCompare(b.name));
+          pages.forEach((page, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = page.name;
+            button.addEventListener('click', () => showPage(page, button));
+            list.append(button);
+            if (index === 0) showPage(page, button);
+          });
+          status.textContent = `${pages.length} website page${pages.length === 1 ? '' : 's'} ready`;
+          welcome.hidden = true;
+        } catch (error) {
+          status.textContent = 'Could not load the archive.';
+          welcome.hidden = false;
+          welcome.querySelector('h2').textContent = 'Could not load the ZIP automatically';
+          welcome.querySelector('p').textContent = `${error.message} Select the ZIP file from your computer to open the included pages.`;
+        }
+      }
+
+      document.getElementById('zip-file').addEventListener('change', event => {
+        const file = event.target.files && event.target.files[0];
+        if (file) loadArchive(file);
+      });
+
+      if (!window.JSZip) {
+        status.textContent = 'ZIP library could not be loaded. Check your internet connection.';
+      } else {
+        fetch(archiveUrl).then(response => {
+          if (!response.ok) throw new Error(`Archive request failed (${response.status}).`);
+          return response.blob();
+        }).then(loadArchive).catch(error => {
+          status.textContent = 'Select the ZIP file to load the websites.';
+          welcome.querySelector('h2').textContent = 'Ready to load the website archive';
+          welcome.querySelector('p').textContent = `${error.message} If this page is opened from your computer, use Choose ZIP file and select pune_52_deploy_fix.zip.`;
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
