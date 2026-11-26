@@ -17,6 +17,7 @@ jobs:
           BASE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
           git diff --name-only HEAD~1 HEAD -- demos samples | grep '/index.html$' | sed 's#/index.html$##' | sort -u > changed.txt || true
           echo samples >> changed.txt
+          if git log -1 --pretty=%B | grep -q '\[check-all\]'; then ls -d demos/*/ samples/*/ | sed 's#/$##' >> changed.txt; fi
           mkdir -p status
           echo "url,http_code" > status/live_check.csv
           cat changed.txt | xargs -P 10 -I{} sh -c 'echo "'$BASE'/{}/,$(curl -s -o /dev/null -w "%{http_code}" "'$BASE'/{}/")"' >> status/live_check.csv
