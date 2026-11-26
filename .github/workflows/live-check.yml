@@ -1,0 +1,26 @@
+name: live-check
+on:
+  push:
+    branches: [main]
+    paths: ['demos/**', 'samples/**']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - name: Wait for Pages deploy, then check changed demo pages
+        run: |
+          sleep 150
+          BASE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          git diff --name-only HEAD~1 HEAD -- demos samples | grep '/index.html$' | sed 's#/index.html$##' | sort -u > changed.txt || true
+          mkdir -p status
+          echo "url,http_code" > status/live_check.csv
+          cat changed.txt | xargs -P 10 -I{} sh -c 'echo "'$BASE'/{}/,$(curl -s -o /dev/null -w "%{http_code}" "'$BASE'/{}/")"' >> status/live_check.csv
+          date -u +"checked_at,%Y-%m-%dT%H:%M:%SZ" > status/last_run.txt
+      - name: Commit result
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add status; git commit -m "live-check result" || true; git push || true
